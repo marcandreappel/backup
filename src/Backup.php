@@ -80,7 +80,7 @@ class Backup
         chdir($this->temporaryDirectory->path());
 
         $archivePath = $this->temporaryDirectory->path().DIRECTORY_SEPARATOR.$this->timestamp.'.zip';
-        $command     = "$this->zipCommand -qrs 1m $archivePath content";
+        $command     = "$this->zipCommand -qrs 750m $archivePath content";
 
         if (shell_exec($command) === null) {
             $this->deleteDirectory($this->temporaryDirectory->path('content'));
