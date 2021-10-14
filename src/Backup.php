@@ -40,7 +40,7 @@ class Backup
         $this->timestamp  = Carbon::now()->format('YmdHis');
         $this->backupName = 'backup_'.$this->timestamp;
 
-        $this->temporaryDirectory = (new TemporaryDirectory())
+        $this->temporaryDirectory = (new TemporaryDirectory(storage_path('app/backup-temp')))
             ->name($this->backupName)
             ->force()
             ->create()
