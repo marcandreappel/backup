@@ -14,7 +14,6 @@ class BackupServiceProvider extends PackageServiceProvider
         $package
             ->name('backup')
             ->hasConfigFile()
-            ->hasViews()
             ->hasCommand(BackupCommand::class);
     }
 }
