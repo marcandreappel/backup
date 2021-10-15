@@ -20,6 +20,7 @@ use Spatie\DbDumper\Databases\Sqlite;
 use Spatie\DbDumper\DbDumper;
 use Spatie\TemporaryDirectory\Exceptions\PathAlreadyExists;
 use Spatie\TemporaryDirectory\TemporaryDirectory;
+use Symfony\Component\Console\Output\ConsoleOutput;
 
 class Backup
 {
@@ -74,6 +75,8 @@ class Backup
      */
     public static function run()
     {
+        app(ConsoleOutput::class)->info("Preflight OK. Starting the backup process");
+
         $instance = new static();
         $instance
             ->cleanBackups()
@@ -86,6 +89,8 @@ class Backup
     private function dumpDatabase()
     {
         if ($this->databaseDumper !== null) {
+            app(ConsoleOutput::class)->info("Dumping database");
+
             $dbType = mb_strtolower(basename(str_replace('\\', '/', get_class($this->databaseDumper))));
 
             $dbName = $this->databaseDumper->getDbName();
@@ -111,6 +116,8 @@ class Backup
      */
     private function createArchive(): self
     {
+        app(ConsoleOutput::class)->info("Creating the ZIP archive");
+
         $currentDirectory = getcwd();
         chdir($this->basePath);
 
@@ -143,6 +150,8 @@ class Backup
 
     private function uploadBackup(): self
     {
+        app(ConsoleOutput::class)->info("Uploading the ZIP archive");
+
         $path = $this->baseName.DIRECTORY_SEPARATOR.$this->backupName;
         $this->destination->makeDirectory($path);
 
@@ -155,6 +164,8 @@ class Backup
 
     private function cleanBackups(): self
     {
+        app(ConsoleOutput::class)->info("Cleaning old backups");
+
         $directories = collect($this->destination->allDirectories($this->baseName))
             ->sortByDesc(function ($dirname) {
                 return $dirname;
@@ -184,6 +195,8 @@ class Backup
 
     private function cleanUp()
     {
+        app(ConsoleOutput::class)->info("Deleting the temporary folders and files");
+
         $this->deleteDirectory($this->tempPath);
         $this->deleteDirectory($this->basePath.DIRECTORY_SEPARATOR.'db-dumps');
     }
