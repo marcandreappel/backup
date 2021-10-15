@@ -32,15 +32,11 @@ class Backup
     private string $baseName;
     private string $tempPath;
     private string $relativeTempPath;
-    /**
-     * @var array|string|string[]
-     */
     private string|array $relativeTempBasePath;
     private ?DbDumper $databaseDumper = null;
 
     /**
-     * @throws PathAlreadyExists
-     * @throws ZipExecutableNotFound
+     * @throws PathAlreadyExists|ZipExecutableNotFound|Exceptions\CannotCreateDbDumper
      */
     public function __construct()
     {
