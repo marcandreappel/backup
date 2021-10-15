@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
 use MarcAndreAppel\Backup\Exceptions\ZipExecutableNotFound;
+use MarcAndreAppel\Backup\Helpers\ConsoleOutput;
 use MarcAndreAppel\Backup\Tasks\DbDumperFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -20,7 +21,6 @@ use Spatie\DbDumper\Databases\Sqlite;
 use Spatie\DbDumper\DbDumper;
 use Spatie\TemporaryDirectory\Exceptions\PathAlreadyExists;
 use Spatie\TemporaryDirectory\TemporaryDirectory;
-use Symfony\Component\Console\Output\ConsoleOutput;
 
 class Backup
 {
