@@ -156,7 +156,7 @@ class Backup
         $this->destination->makeDirectory($path);
 
         foreach ((new RecursiveDirectoryIterator($this->temporaryDirectory->path(), FilesystemIterator::SKIP_DOTS)) as $file) {
-            $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), file_get_contents($file->getRealPath()));
+            $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), fopen($file->getRealPath(), 'r+'));
         }
 
         return $this;
