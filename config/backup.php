@@ -1,10 +1,13 @@
 <?php
-
 return [
-    'backup_name' => 'backups',
-    'exclude'    => [
+    'exclude_directories' => [
         'vendor/',
         'npm_modules/',
     ],
-    'destination_disk' => 'local',
+    'disk'                => 'local',
+    'database'            => 'mysql',
+    'base_name'           => 'backups',
+    'base_path'           => base_path(),
+    'temp_path'           => storage_path(),
+    'parts_size'          => '750m',
 ];

@@ -3,27 +3,40 @@ declare(strict_types=1);
 
 namespace MarcAndreAppel\Backup;
 
-use AFM\Rsync\Rsync;
 use FilesystemIterator;
-use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
-use MarcAndreAppel\Backup\Exceptions\ZipExecutableNotFound;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
+use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
+use MarcAndreAppel\Backup\Exceptions\ZipExecutableNotFound;
+use MarcAndreAppel\Backup\Tasks\DbDumperFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Spatie\DbDumper\Compressors\GzipCompressor;
+use Spatie\DbDumper\Databases\Sqlite;
+use Spatie\DbDumper\DbDumper;
 use Spatie\TemporaryDirectory\Exceptions\PathAlreadyExists;
 use Spatie\TemporaryDirectory\TemporaryDirectory;
 
 class Backup
 {
-    private Filesystem $destinationDisk;
+    private Filesystem $destination;
     private string $timestamp;
     private TemporaryDirectory $temporaryDirectory;
     public string $backupName;
 
     protected string $zipCommand = "/usr/bin/zip";
+    private string $basePath;
+    private string $baseName;
+    private string $tempPath;
+    private string $relativeTempPath;
+    /**
+     * @var array|string|string[]
+     */
+    private string|array $relativeTempBasePath;
+    private ?DbDumper $databaseDumper = null;
 
     /**
      * @throws PathAlreadyExists
@@ -33,18 +46,30 @@ class Backup
     {
         $this->checkRequirements();
 
-        $this->destinationDisk = app(Factory::class)->disk(config('backup.destination_disk'));
-        if (!$this->destinationDisk->exists(config('backup.backup_name'))) {
-            $this->destinationDisk->makeDirectory(config('backup.backup_name'));
-        }
+        $this->baseName   = Str::camel(strtolower(config('backup.base_name')));
+        $this->basePath   = config('backup.base_path') ?? base_path();
+        $this->tempPath   = (config('backup.temp_path') ?? '').DIRECTORY_SEPARATOR.'_temp_'.$this->baseName;
         $this->timestamp  = Carbon::now()->format('YmdHis');
         $this->backupName = 'backup_'.$this->timestamp;
 
-        $this->temporaryDirectory = (new TemporaryDirectory(storage_path('app/backup-temp')))
+        $this->temporaryDirectory = (new TemporaryDirectory($this->tempPath))
             ->name($this->backupName)
             ->force()
             ->create()
             ->empty();
+
+        $this->relativeTempPath     = str_replace($this->basePath, '.', $this->temporaryDirectory->path());
+        $this->relativeTempBasePath = str_replace($this->basePath, '.', $this->tempPath);
+
+        $this->destination = app(Factory::class)
+            ->disk(config('backup.disk'));
+        if (!$this->destination->exists($this->baseName)) {
+            $this->destination->makeDirectory($this->baseName);
+        }
+
+        if (($database = config('backup.database')) !== null) {
+            $this->databaseDumper = DbDumperFactory::createFromConnection($database);
+        }
     }
 
     /**
@@ -55,18 +80,30 @@ class Backup
         $instance = new static();
         $instance
             ->cleanBackups()
-            ->syncFilesystem()
+            ->dumpDatabase()
             ->createArchive()
             ->uploadBackup()
             ->cleanUp();
     }
 
-    private function syncFilesystem(): self
+    private function dumpDatabase()
     {
-        $rsync = new Rsync();
+        if ($this->databaseDumper !== null) {
+            $dbType = mb_strtolower(basename(str_replace('\\', '/', get_class($this->databaseDumper))));
 
-        $rsync->setExclude(config('backup.exclude', []));
-        $rsync->sync(base_path(), $this->temporaryDirectory->path('content'));
+            $dbName = $this->databaseDumper->getDbName();
+            if ($this->databaseDumper instanceof Sqlite) {
+                $dbName = '1-database';
+            }
+            $fileName = "{$dbType}-{$dbName}.sql";
+
+            $this->databaseDumper->useCompressor(new GzipCompressor());
+            $fileName .= '.'.$this->databaseDumper->getCompressorExtension();
+
+            $temporaryFilePath = $this->basePath.DIRECTORY_SEPARATOR.'db-dumps'.DIRECTORY_SEPARATOR.$fileName;
+
+            $this->databaseDumper->dumpToFile($temporaryFilePath);
+        }
 
         return $this;
     }
@@ -77,13 +114,27 @@ class Backup
     private function createArchive(): self
     {
         $currentDirectory = getcwd();
-        chdir($this->temporaryDirectory->path());
+        chdir($this->basePath);
 
-        $archivePath = $this->temporaryDirectory->path().DIRECTORY_SEPARATOR.$this->timestamp.'.zip';
-        $command     = "$this->zipCommand -qrs 750m $archivePath content";
+        $exclude = '';
+        if (!empty($excludeDirectories = config('backup.exclude_directories', []))) {
+            $exclude         = '-x '.$this->relativeTempBasePath.DIRECTORY_SEPARATOR.'\* ';
+            $destinationDisk = config('filesystems.disks.'.config('backup.disk'));
+            if ($destinationDisk['driver'] === 'local') {
+                $destinationPath = str_replace($this->basePath, '', $destinationDisk['root']);
+                $exclude         .= '.'.$destinationPath.DIRECTORY_SEPARATOR.$this->baseName.DIRECTORY_SEPARATOR.'\* ';
+            }
+            foreach ($excludeDirectories as $directory) {
+                $exclude .= '.'.DIRECTORY_SEPARATOR.$directory.'\* ';
+            }
+        }
+
+        $size = config('backup.parts_size');
+
+        $archivePath = $this->relativeTempPath.DIRECTORY_SEPARATOR.'backup_'.$this->timestamp.'.zip';
+        $command     = "$this->zipCommand -qrs $size $archivePath . $exclude";
 
         if (shell_exec($command) === null) {
-            $this->deleteDirectory($this->temporaryDirectory->path('content'));
             chdir($currentDirectory);
 
             return $this;
@@ -94,11 +145,11 @@ class Backup
 
     private function uploadBackup(): self
     {
-        $path = config('backup.backup_name').DIRECTORY_SEPARATOR.$this->backupName;
-        $this->destinationDisk->makeDirectory($path);
+        $path = $this->baseName.DIRECTORY_SEPARATOR.$this->backupName;
+        $this->destination->makeDirectory($path);
 
         foreach ((new RecursiveDirectoryIterator($this->temporaryDirectory->path(), FilesystemIterator::SKIP_DOTS)) as $file) {
-            $this->destinationDisk->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), file_get_contents($file->getRealPath()));
+            $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), file_get_contents($file->getRealPath()));
         }
 
         return $this;
@@ -106,13 +157,14 @@ class Backup
 
     private function cleanBackups(): self
     {
-        $directories = collect($this->destinationDisk->allDirectories(config('backup.backup_name')))
+        $directories = collect($this->destination->allDirectories($this->baseName))
             ->sortByDesc(function ($dirname) {
                 return $dirname;
             });
+
         if ($directories->count() > 4) {
             $obsolete = $directories->last();
-            $this->destinationDisk->deleteDirectory($obsolete);
+            $this->destination->deleteDirectory($obsolete);
         }
 
         return $this;
@@ -134,7 +186,8 @@ class Backup
 
     private function cleanUp()
     {
-        $this->deleteDirectory($this->temporaryDirectory->path());
+        $this->deleteDirectory($this->tempPath);
+        $this->deleteDirectory($this->basePath.DIRECTORY_SEPARATOR.'db-dumps');
     }
 
     /**
@@ -145,7 +198,7 @@ class Backup
         if (!is_executable($this->zipCommand)) {
             throw new ZipExecutableNotFound();
         }
-        if (empty(config('backup.backup_name')) || empty(config('backup.destination_disk'))) {
+        if (empty(config('backup.base_name')) || empty(config('backup.disk'))) {
             throw new InvalidArgumentException();
         }
     }
