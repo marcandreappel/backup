@@ -7,6 +7,7 @@ use FilesystemIterator;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
@@ -96,6 +97,7 @@ class Backup
             $this->databaseDumper->useCompressor(new GzipCompressor());
             $fileName .= '.'.$this->databaseDumper->getCompressorExtension();
 
+            File::ensureDirectoryExists($this->basePath.DIRECTORY_SEPARATOR.'db-dumps');
             $temporaryFilePath = $this->basePath.DIRECTORY_SEPARATOR.'db-dumps'.DIRECTORY_SEPARATOR.$fileName;
 
             $this->databaseDumper->dumpToFile($temporaryFilePath);
