@@ -32,9 +32,7 @@ class Backup
     protected string $zipCommand = "/usr/bin/zip";
     private string $basePath;
     private string $baseName;
-    private string $tempPath;
     private string $relativeTempPath;
-    private string|array $relativeTempBasePath;
     private ?DbDumper $databaseDumper = null;
 
     /**
@@ -46,18 +44,16 @@ class Backup
 
         $this->baseName   = Str::camel(strtolower(config('backup.base_name')));
         $this->basePath   = config('backup.base_path') ?? base_path();
-        $this->tempPath   = (config('backup.temp_path') ?? '').DIRECTORY_SEPARATOR.'_temp_'.$this->baseName;
         $this->timestamp  = Carbon::now()->format('YmdHis');
         $this->backupName = 'backup_'.$this->timestamp;
 
-        $this->temporaryDirectory = (new TemporaryDirectory($this->tempPath))
+        $this->temporaryDirectory = (new TemporaryDirectory(config('backup.temp_path') ?? ''))
             ->name($this->backupName)
             ->force()
             ->create()
             ->empty();
 
-        $this->relativeTempPath     = str_replace($this->basePath, '.', $this->temporaryDirectory->path());
-        $this->relativeTempBasePath = str_replace($this->basePath, '.', $this->tempPath);
+        $this->relativeTempPath = str_replace($this->basePath, '.', $this->temporaryDirectory->path());
 
         $this->destination = app(Factory::class)
             ->disk(config('backup.disk'));
@@ -73,7 +69,7 @@ class Backup
     /**
      * @throws ZipCommandFailed
      */
-    public static function run()
+    public static function run(): void
     {
         app(ConsoleOutput::class)->info("Preflight OK. Starting the backup process");
 
@@ -86,7 +82,7 @@ class Backup
             ->cleanUp();
     }
 
-    private function dumpDatabase()
+    private function dumpDatabase(): self
     {
         if ($this->databaseDumper !== null) {
             app(ConsoleOutput::class)->info("Dumping database");
@@ -97,7 +93,7 @@ class Backup
             if ($this->databaseDumper instanceof Sqlite) {
                 $dbName = '1-database';
             }
-            $fileName = "{$dbType}-{$dbName}.sql";
+            $fileName = "$dbType-$dbName.sql";
 
             $this->databaseDumper->useCompressor(new GzipCompressor());
             $fileName .= '.'.$this->databaseDumper->getCompressorExtension();
@@ -197,7 +193,7 @@ class Backup
     {
         app(ConsoleOutput::class)->info("Deleting the temporary folders and files");
 
-        $this->deleteDirectory($this->tempPath);
+        $this->temporaryDirectory->delete();
         $this->deleteDirectory($this->basePath.DIRECTORY_SEPARATOR.'db-dumps');
     }
 
