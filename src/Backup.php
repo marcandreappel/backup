@@ -119,7 +119,7 @@ class Backup
 
         $exclude = '';
         if (!empty($excludeDirectories = config('backup.exclude_directories', []))) {
-            $exclude         = '-x '.$this->relativeTempBasePath.DIRECTORY_SEPARATOR.'\* ';
+            $exclude         = '-x '.$this->relativeTempPath.DIRECTORY_SEPARATOR.'\* ';
             $destinationDisk = config('filesystems.disks.'.config('backup.disk'));
             if ($destinationDisk['driver'] === 'local') {
                 $destinationPath = str_replace($this->basePath, '', $destinationDisk['root']);
