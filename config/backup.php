@@ -4,10 +4,12 @@ return [
         'vendor/',
         'npm_modules/',
     ],
-    'disk'                => 'local',
-    'database'            => 'mysql',
-    'base_name'           => 'backups',
-    'base_path'           => base_path(),
-    'temp_path'           => storage_path(),
-    'parts_size'          => '750m',
+
+    'disk'         => 'local',
+    'database'     => 'mysql',
+    'base_name'    => 'backups',
+    'base_path'    => base_path(),
+    'temp_path'    => storage_path(),
+    'parts_size'   => '120k',
+    'backup_count' => 7,
 ];

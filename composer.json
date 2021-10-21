@@ -33,7 +33,10 @@
     "autoload": {
         "psr-4": {
             "MarcAndreAppel\\Backup\\": "src"
-        }
+        },
+        "files": [
+            "src/Helpers/helpers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

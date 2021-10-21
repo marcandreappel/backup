@@ -6,6 +6,8 @@ namespace MarcAndreAppel\Backup\Commands;
 use Exception;
 use MarcAndreAppel\Backup\Backup;
 use Illuminate\Console\Command;
+use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
+use MarcAndreAppel\Backup\Helpers\ConsoleOutput;
 
 class BackupCommand extends Command
 {
@@ -13,14 +15,17 @@ class BackupCommand extends Command
 
     public $description = 'Back it up now!';
 
+    /**
+     * @throws ZipCommandFailed
+     */
     public function handle()
     {
-        try {
-            Backup::run();
+        app(ConsoleOutput::class)->setCommand($this);
 
-            $this->comment('All done');
-        } catch (Exception) {
-            $this->error('Nope, something went wrong');
-        }
+        console_output()->comment('Starting backup');
+
+        Backup::run();
+
+        $this->comment('All done');
     }
 }

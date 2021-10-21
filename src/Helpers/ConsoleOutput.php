@@ -5,6 +5,11 @@ namespace MarcAndreAppel\Backup\Helpers;
 
 use Illuminate\Console\Command;
 
+/**
+ * @method info(string $string)
+ * @method comment(string $string)
+ * @method error(string $string)
+ */
 class ConsoleOutput
 {
     protected ?Command $command = null;

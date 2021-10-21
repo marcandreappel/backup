@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace MarcAndreAppel\Backup;
 
+use Exception;
 use FilesystemIterator;
 use Illuminate\Contracts\Filesystem\Factory;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -12,7 +13,6 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
 use MarcAndreAppel\Backup\Exceptions\ZipExecutableNotFound;
-use MarcAndreAppel\Backup\Helpers\ConsoleOutput;
 use MarcAndreAppel\Backup\Tasks\DbDumperFactory;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -34,6 +34,7 @@ class Backup
     private string $baseName;
     private string $relativeTempPath;
     private ?DbDumper $databaseDumper = null;
+    private int $backupCount;
 
     /**
      * @throws PathAlreadyExists|ZipExecutableNotFound|Exceptions\CannotCreateDbDumper
@@ -42,10 +43,11 @@ class Backup
     {
         $this->checkRequirements();
 
-        $this->baseName   = Str::camel(strtolower(config('backup.base_name')));
-        $this->basePath   = config('backup.base_path') ?? base_path();
-        $this->timestamp  = Carbon::now()->format('YmdHis');
-        $this->backupName = 'backup_'.$this->timestamp;
+        $this->baseName    = Str::camel(strtolower(config('backup.base_name')));
+        $this->basePath    = config('backup.base_path') ?? base_path();
+        $this->timestamp   = Carbon::now()->format('YmdHis');
+        $this->backupName  = 'backup_'.$this->timestamp;
+        $this->backupCount = (int) config('backup.backup_count', 7);
 
         $this->temporaryDirectory = (new TemporaryDirectory(config('backup.temp_path') ?? ''))
             ->name($this->backupName)
@@ -71,7 +73,7 @@ class Backup
      */
     public static function run(): void
     {
-        app(ConsoleOutput::class)->info("Preflight OK. Starting the backup process");
+        console_output()->info("Preflight OK. Starting the backup process");
 
         $instance = new static();
         $instance
@@ -85,7 +87,7 @@ class Backup
     private function dumpDatabase(): self
     {
         if ($this->databaseDumper !== null) {
-            app(ConsoleOutput::class)->info("Dumping database");
+            console_output()->info("Dumping database");
 
             $dbType = mb_strtolower(basename(str_replace('\\', '/', get_class($this->databaseDumper))));
 
@@ -112,7 +114,7 @@ class Backup
      */
     private function createArchive(): self
     {
-        app(ConsoleOutput::class)->info("Creating the ZIP archive");
+        console_output()->info("Creating the ZIP archive");
 
         $currentDirectory = getcwd();
         chdir($this->basePath);
@@ -146,28 +148,40 @@ class Backup
 
     private function uploadBackup(): self
     {
-        app(ConsoleOutput::class)->info("Uploading the ZIP archive");
+        console_output()->info("Uploading the ZIP archive");
 
         $path = $this->baseName.DIRECTORY_SEPARATOR.$this->backupName;
         $this->destination->makeDirectory($path);
 
-        foreach ((new RecursiveDirectoryIterator($this->temporaryDirectory->path(), FilesystemIterator::SKIP_DOTS)) as $file) {
-            $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), fopen($file->getRealPath(), 'r+'));
-        }
+        $sources  = $this->temporaryDirectory->path();
+        $iterator = new RecursiveDirectoryIterator($sources, FilesystemIterator::SKIP_DOTS);
+
+        do {
+            foreach ($iterator as $file) {
+                try {
+                    $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), fopen($file->getRealPath(), 'r+'));
+                    unlink($file->getRealPath());
+                } catch (Exception) {
+                    console_output()->error('Upload failed for '.$file->getFilename());
+                }
+            }
+        } while (count(glob($sources.DIRECTORY_SEPARATOR."*")) !== 0);
+
+        console_output()->info('Upload succeeded');
 
         return $this;
     }
 
     private function cleanBackups(): self
     {
-        app(ConsoleOutput::class)->info("Cleaning old backups");
+        console_output()->info("Cleaning old backups");
 
         $directories = collect($this->destination->allDirectories($this->baseName))
             ->sortByDesc(function ($dirname) {
                 return $dirname;
             });
 
-        if ($directories->count() > 4) {
+        if ($directories->count() > $this->backupCount) {
             $obsolete = $directories->last();
             $this->destination->deleteDirectory($obsolete);
         }
@@ -191,7 +205,7 @@ class Backup
 
     private function cleanUp()
     {
-        app(ConsoleOutput::class)->info("Deleting the temporary folders and files");
+        console_output()->info("Deleting the temporary folders and files");
 
         $this->temporaryDirectory->delete();
         $this->deleteDirectory($this->basePath.DIRECTORY_SEPARATOR.'db-dumps');
