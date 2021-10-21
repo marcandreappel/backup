@@ -3,17 +3,24 @@ declare(strict_types=1);
 
 namespace MarcAndreAppel\Backup\Commands;
 
-use Exception;
-use MarcAndreAppel\Backup\Backup;
 use Illuminate\Console\Command;
+use MarcAndreAppel\Backup\Backup;
 use MarcAndreAppel\Backup\Exceptions\ZipCommandFailed;
 use MarcAndreAppel\Backup\Helpers\ConsoleOutput;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 class BackupCommand extends Command
 {
     public $signature = 'backup:run';
-
     public $description = 'Back it up now!';
+
+    public function run(InputInterface $input, OutputInterface $output): int
+    {
+        app(ConsoleOutput::class)->setCommand($this);
+
+        return parent::run($input, $output);
+    }
 
     /**
      * @throws ZipCommandFailed
@@ -26,6 +33,6 @@ class BackupCommand extends Command
 
         Backup::run();
 
-        $this->comment('All done');
+        console_output()->comment('All done');
     }
 }

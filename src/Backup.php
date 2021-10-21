@@ -146,25 +146,44 @@ class Backup
         }
     }
 
+    private function createDistantDirectory(string $path)
+    {
+        do {
+            try {
+                $this->destination->makeDirectory($path);
+
+                $created = true;
+            } catch (Exception) {
+                sleep(10);
+
+                $created = false;
+            }
+        } while (!$created);
+    }
+
     private function uploadBackup(): self
     {
         console_output()->info("Uploading the ZIP archive");
 
         $path = $this->baseName.DIRECTORY_SEPARATOR.$this->backupName;
-        $this->destination->makeDirectory($path);
 
-        $sources  = $this->temporaryDirectory->path();
-        $iterator = new RecursiveDirectoryIterator($sources, FilesystemIterator::SKIP_DOTS);
+        $this->createDistantDirectory($path);
 
+        $sources = $this->temporaryDirectory->path();
+        $firstRun = true;
         do {
-            foreach ($iterator as $file) {
+            if (!$firstRun) {
+                console_output()->info('Retrying upload of missing parts');
+            }
+            foreach ((new RecursiveDirectoryIterator($sources, FilesystemIterator::SKIP_DOTS)) as $file) {
                 try {
-                    $this->destination->put($path.DIRECTORY_SEPARATOR.$file->getFilename(), fopen($file->getRealPath(), 'r+'));
+                    $this->destination->writeStream($path.DIRECTORY_SEPARATOR.$file->getFilename(), fopen($file->getRealPath(), 'r+'));
                     unlink($file->getRealPath());
                 } catch (Exception) {
                     console_output()->error('Upload failed for '.$file->getFilename());
                 }
             }
+            $firstRun = false;
         } while (count(glob($sources.DIRECTORY_SEPARATOR."*")) !== 0);
 
         console_output()->info('Upload succeeded');
@@ -191,16 +210,18 @@ class Backup
 
     private function deleteDirectory(string $contentDirectory): void
     {
-        $directoryIterator = new RecursiveDirectoryIterator($contentDirectory, FilesystemIterator::SKIP_DOTS);
-        $iteratorIterator  = new RecursiveIteratorIterator($directoryIterator, RecursiveIteratorIterator::CHILD_FIRST);
-        foreach ($iteratorIterator as $file) {
-            if ($file->isDir()) {
-                rmdir($file->getRealPath());
-            } else {
-                unlink($file->getRealPath());
+        try {
+            $directoryIterator = new RecursiveDirectoryIterator($contentDirectory, FilesystemIterator::SKIP_DOTS);
+            $iteratorIterator  = new RecursiveIteratorIterator($directoryIterator, RecursiveIteratorIterator::CHILD_FIRST);
+            foreach ($iteratorIterator as $file) {
+                if ($file->isDir()) {
+                    rmdir($file->getRealPath());
+                } else {
+                    unlink($file->getRealPath());
+                }
             }
-        }
-        rmdir($contentDirectory);
+            rmdir($contentDirectory);
+        } catch (Exception) {}
     }
 
     private function cleanUp()

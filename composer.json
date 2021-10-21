@@ -16,10 +16,12 @@
     ],
     "require": {
         "php": "^8.0",
+        "ext-pcntl": "*",
         "albertofem/rsync-lib": "^1.0",
         "illuminate/contracts": "^8.37",
         "spatie/db-dumper": "^3.0",
         "spatie/laravel-package-tools": "^1.9",
+        "spatie/laravel-signal-aware-command": "^1.1",
         "spatie/temporary-directory": "^2.0"
     },
     "require-dev": {
