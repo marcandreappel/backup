@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace MarcAndreAppel\Backup\Tasks;
 
@@ -17,16 +18,19 @@ class DbDumperFactory
 {
     protected static array $custom = [];
 
+    /**
+     * @throws CannotCreateDbDumper
+     */
     public static function createFromConnection(string $dbConnectionName): DbDumper
     {
         $parser = new ConfigurationUrlParser();
 
-        if (config("database.connections.{$dbConnectionName}") === null) {
+        if (config("database.connections.$dbConnectionName") === null) {
             throw CannotCreateDbDumper::unsupportedDriver($dbConnectionName);
         }
 
         try {
-            $dbConfig = $parser->parseConfiguration(config("database.connections.{$dbConnectionName}"));
+            $dbConfig = $parser->parseConfiguration(config("database.connections.$dbConnectionName"));
         } catch (Exception) {
             throw CannotCreateDbDumper::unsupportedDriver($dbConnectionName);
         }
@@ -72,6 +76,9 @@ class DbDumperFactory
         static::$custom[$driver] = $callback;
     }
 
+    /**
+     * @throws CannotCreateDbDumper
+     */
     protected static function forDriver($dbDriver): DbDumper
     {
         $driver = strtolower($dbDriver);

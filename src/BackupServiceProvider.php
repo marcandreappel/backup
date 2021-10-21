@@ -18,7 +18,7 @@ class BackupServiceProvider extends PackageServiceProvider
             ->hasCommand(BackupCommand::class);
     }
 
-    public function packageRegistered()
+    public function packageRegistered(): void
     {
         $this->app->singleton(ConsoleOutput::class);
     }

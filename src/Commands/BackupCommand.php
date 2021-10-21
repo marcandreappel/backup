@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class BackupCommand extends Command
 {
     public $signature = 'backup:run';
-    public $description = 'Back it up now!';
+    public $description = 'Runs the backup process';
 
     public function run(InputInterface $input, OutputInterface $output): int
     {

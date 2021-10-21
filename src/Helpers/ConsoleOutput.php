@@ -23,7 +23,7 @@ class ConsoleOutput
     {
         $consoleOutput = app(static::class);
 
-        if (! $consoleOutput->command) {
+        if (!$consoleOutput->command) {
             return;
         }
 
